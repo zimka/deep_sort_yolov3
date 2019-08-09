@@ -37,11 +37,13 @@ class Tracker:
 
     """
 
-    def __init__(self, metric, max_iou_distance=0.7, max_age=30, n_init=3):
+    def __init__(self, metric, max_iou_distance=0.7, max_age=30, n_init=3, lambda_=0.5, cosine_distance_threshold=None):
         self.metric = metric
         self.max_iou_distance = max_iou_distance
         self.max_age = max_age
         self.n_init = n_init
+        self.lambda_=lambda_
+        self.cosine_distance_threshold=cosine_distance_threshold
 
         self.kf = kalman_filter.KalmanFilter()
         self.tracks = []
@@ -94,11 +96,29 @@ class Tracker:
 
         def gated_metric(tracks, dets, track_indices, detection_indices):
             features = np.array([dets[i].feature for i in detection_indices])
+            dets_1=np.array([dets[i] for i in detection_indices])
+            tracks_1= np.array([tracks[i] for i in track_indices])
             targets = np.array([tracks[i].track_id for i in track_indices])
-            cost_matrix = self.metric.distance(features, targets)
-            cost_matrix = linear_assignment.gate_cost_matrix(
-                self.kf, cost_matrix, tracks, dets, track_indices,
-                detection_indices)
+            #cost_matrix = self.metric.distance(features, targets)         
+            cost_matrix_features = self.metric.distance(features, targets) # d2(i,j)
+            cost_matrix_features = linear_assignment.gate_cosine_distance(cost_matrix=cost_matrix_features,
+                                                        cosine_distance_threshold=self.cosine_distance_threshold)
+            #print(cost_matrix_features)
+            cost_matrix_mah = linear_assignment.get_cost_matrix_mah(self.kf,
+                                                                    tracks_1,
+                                                                    dets_1)       
+            cost_matrix_mah=linear_assignment.gate_mahalanobis_distance(cost_matrix=cost_matrix_mah)
+            mah_threshold=9.4877
+            cost_matrix_mah=cost_matrix_mah/mah_threshold
+            #print(cost_matrix_mah)
+            cost_matrix= self.lambda_*cost_matrix_mah+(1-self.lambda_)*cost_matrix_features
+            where_are_NaNs = np.isnan(cost_matrix)
+            cost_matrix[where_are_NaNs] = 10**5
+            
+            
+            #cost_matrix = linear_assignment.gate_cost_matrix(
+            #    self.kf, cost_matrix, tracks, dets, track_indices,
+            #    detection_indices)
 
             return cost_matrix
 

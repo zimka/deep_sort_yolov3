@@ -188,3 +188,40 @@ def gate_cost_matrix(
             track.mean, track.covariance, measurements, only_position)
         cost_matrix[row, gating_distance > gating_threshold] = gated_cost
     return cost_matrix
+
+def get_cost_matrix_mah(kf,tracks, detections,only_position=False):
+    cost_matrix=np.zeros((len(tracks),len(detections)))
+    measurements = np.asarray([detections[i].to_xyah() for i in range(len(detections))])
+    for i in range(len(tracks)):
+        cost_matrix[i,:]=kf.gating_distance(mean=tracks[i].mean,
+                                            covariance=tracks[i].covariance,
+                                            measurements=measurements,
+                                            only_position=only_position)
+    return cost_matrix
+
+def gate_mahalanobis_distance(cost_matrix,only_position=False):
+    gating_dim = 2 if only_position else 4
+    gating_threshold = kalman_filter.chi2inv95[gating_dim]
+    ind=cost_matrix>gating_threshold 
+    cost_matrix[ind]=None
+    return cost_matrix
+
+def gate_cosine_distance(cost_matrix,cosine_distance_threshold):
+    if cosine_distance_threshold==None:
+        return cost_matrix
+    else:
+        ind=cost_matrix>cosine_distance_threshold
+        cost_matrix[ind]=None
+        return cost_matrix
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
